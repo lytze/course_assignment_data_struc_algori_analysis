@@ -1,11 +1,6 @@
----
-output:
-  html_document:
-    theme: cerulean
----
-
 Title.of.Project
 ================
+
 **Group Members** | *Li Yutze*, *Zhu Jianke*  
 **Date** | *inssert.date.here*  
 

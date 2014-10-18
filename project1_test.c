@@ -12,7 +12,7 @@ int main() {
         /* load the outputs into a .csv file */
     
     fprintf(file_p, 
-    "lenght, iter.rep, iter.tck, iter.ttime, iter.time, recr.rep, recr.tck, recr.ttime, recr.timr\n");
+    "scale, iter.rep, iter.tck, iter.ttime, iter.time, recr.rep, recr.tck, recr.ttime, recr.time\n");
         /* write the header of the .csv file */
     
     /* ================================================================ */
@@ -20,8 +20,8 @@ int main() {
     int list_lengths[] = {100, 500, 1000, 2000, 4000, 6000, 8000, 10000};
     int list_len_index = 0;
         /* lengths of lists */
-    int rep_time = 10;
-        /* let procedures run 10 times */
+    int rep_time = 500;
+        /* let procedures run 500 times */
     
     int current_list[10000 + 100];
         /* current list for manupulating */

@@ -2,6 +2,7 @@
 // Richest in the World
 
 # include <stdio.h>
+# include <stdlib.h>
 
 # define	MAX_RECORD	100000				// Maxium length for a list of records
 # define	MAX_QUERY	1000 				// Maxium query length
@@ -17,7 +18,7 @@ struct record {
 	int		age;
 	long	worth;
 };
-typedef struct record_list RecordList;
+typedef struct record_list *RecordList;
 struct record_list {
 	Record 	list[MAX_RECORD + 1];			// -> list of data records, heap, start from index 1
 	long	len;
@@ -32,17 +33,22 @@ struct query {
 };
 typedef struct query_list *QueryList;
 struct query_list {
-	Query 	list[MAX_QUERY + 1];			// -> list of query cases
+	Query 	list[MAX_QUERY + 1];			// -> list of query cases, start from index 0
 	int		len;
 };
 /* QueryList -> (list[index] -> cases; len = length) */
 
+typedef struct answer_record_list ARList;
+struct answer_record_list {
+	Record 	anslist[MAX_ANSWER + 1];		// -> answer records
+	int 	anslen;							// -> length of this answer
+};
 typedef struct answer *AnswerList;
 struct answer {
-	Record 	list[MAX_ANSWER + 1];
+	ARList 	list[MAX_QUERY + 1];			// -> list of answer record lists
 	int 	len;
 };
-/* AnswerList -> (list[index] -> data; len = length) */
+/* AnswerList -> (list[index] -> (anslist[index] -> data; -> anslen = length); len = length) */
 /////////////////////////////////////////////////////////////////////////////////////// END OF DEFINE DATA TYPES
 
 /////////////////////////////////////////////////////////////////////////////////////// FUNCTION DECLARATIONS
@@ -54,8 +60,8 @@ Record 			heap_rmtop(RecordList store);
 void 			heap_pup(RecordList store, long index);
 void			heap_pdown(RecordList store, long index);
 /* Heap routines */
-RecordList 		build_records(void);
-QueryList 	 	build_queries(void);
+RecordList 		build_records(long n);
+QueryList 	 	build_queries(long k);
 /* Build up record list and query list */
 AnswerList		feed_cases(RecordList store, QueryList quel);
 void			feed_back(AnswerList ansl);
@@ -117,7 +123,7 @@ void heap_insert(RecordList store, Record current) {
 	}										// Cast error if the storage heap is full
 
 	store -> len++;							// Lengthen the heap
-	store -> list[len] = current;			// Append new record to the list
+	store -> list[store -> len] = current;	// Append new record to the list
 	heap_pup(store, store -> len);			// Percolate up the fit the heap
 
 	return;
@@ -192,6 +198,133 @@ void heap_pdown(RecordList store, long index) {
 	
 	return;
 }
+
+RecordList build_records(long n) {
+	// Read from stdin the data to be processed
+	// 1st line: number of records - n, number of queries - k
+	// Next n lines: name, age and worth of the nth record
+	// Next k lines: number of output, and the age range of the kth query
+	RecordList rt;
+	rt = (RecordList)malloc(sizeof(struct record_list));
+	if (!rt) {
+		perror("In build_records(n):\n\tout of memory\n");
+	}
+	rt -> list[0] -> worth = MAX_WORTH + 1;			// Not required
+	rt -> len = 0;
+
+	while (rt -> len < n) {
+		// While current length not full
+		Record newrec;
+		newrec = (Record)malloc(sizeof(struct record));
+		if (!newrec) {
+			perror("In build_records(n):\n\tout of memory\n");
+		}
+		scanf("%s%d%ld", newrec -> name, &newrec -> age, &newrec -> worth);
+		heap_insert(rt, newrec);			// -> len ++ in heap_insert()
+	}
+
+	return rt;
+}
+
+QueryList build_queries(long k) {
+	// Read from stdin the data to be processed
+	// 1st line: number of records - n, number of queries - k
+	// Next n lines: name, age and worth of the nth record
+	// Next k lines: number of output, and the age range of the kth query
+	QueryList rt;
+	rt = (QueryList)malloc(sizeof(struct query_list));
+	if (!rt) {
+		perror("In build_records(n):\n\tout of memory\n");
+	}
+	rt -> len = 0;
+
+	while (rt -> len < k) {
+		// Whille cuurent length not full
+		Query newq;
+		newq = (Query)malloc(sizeof(struct query_list));
+		if (!newq) {
+			perror("In build_records(n):\n\tout of memory\n");
+		}
+		scanf("%d%d%d", &newq -> resid, &newq -> lower, &newq -> upper);
+		rt -> len++;
+	}
+
+	return rt;
+}
+
+AnswerList feed_cases(RecordList store, QueryList quel) {
+	// Based on built heap, build answer list responsible to the query list
+	// Return the AnswerList
+	AnswerList rt;
+	rt = (AnswerList)malloc(sizeof(struct answer));
+	rt -> len = quel -> len;					// Length of answers == length of queries
+	rt -> list = (ARList)malloc(sizeof(struct answer_record_list));
+	int alindex = 0;
+	while (alindex < rt -> len) {
+		rt -> list[alindex] -> anslen = 0;		// Each answer now let Record number to be 0
+		alindex++;
+	}											// Initialize AnswerList
+
+	int dorep = 0;								// Check mark for going on shearching
+	int qlindex = 0;							// Querylist index
+	while (qlindex < quel -> len) {
+		// While in querylist
+		if (quel -> list[qlindex] -> resid != 0) {
+			dorep = 1;
+			break;								// If found residual question, dorepeat
+		}
+		qlindex++;
+	}
+
+	while (dorep) {
+		Record current;
+		current = heap_rmtop(store);			// Get the prior most record
+
+		qlindex = 0;
+		while (qlindex < quel -> len) {
+			if (quel -> list[qlindex] -> resid != 0) {
+				// If the required number of answer is not reached
+				if (current -> age >= quel -> list[qlindex] -> lower &&
+					current -> age <= quel -> list[qlindex] -> upper) {
+					// Put current Record into the AnswerList if the age is in the range
+					i = rt -> list[qlindex] -> len++; // i is the value before increase
+					rt -> list[qlindex] -> anslist[i] = current;
+				}
+			}
+			qlindex++;
+		}
+
+		dorep = 0;
+		qlindex = 0;
+		while (qlindex < quel -> len) {
+			if (quel -> list[qlindex] -> resid != 0) {
+				dorep = 1;
+				break;							// If found residual question, dorepeat
+			}
+			qlindex++;
+		}
+	}
+
+	return rt;
+}
+
+void feed_back(AnswerList ansl) {
+	// Viva! The last function!
+	// Print out the AnswerList
+	int i = 0;
+	while (i < ansl -> len) {
+		printf("Case #%d:\n", i + 1);			// Answer for query #(i + 1)
+		int j = 0;
+		while (j < ansl -> list[i] -> anslen) {
+			printf("%s\t\t%d\t%ld\n", ansl -> list[i] -> anslist[j] -> name,
+									  ansl -> list[i] -> anslist[j] -> age,
+									  ansl -> list[i] -> anslist[j] -> worth);
+			j++;
+		}
+		i++;
+	}
+	return;
+}
 /////////////////////////////////////////////////////////////////////////////////////// END OF FUNTIONS
 
 /////////////////////////////////////////////////////////////////////////////////////// BODY
@@ -199,11 +332,14 @@ int main(void) {
 	RecordList 	store;
 	QueryList 	quel;
 	AnswerList 	ansl;
+	long n;
+	int k;
 
-	store = build_records();
-	quel = build_queries();
-	ansl = feed_cases();
-	feed_back();
+	scanf("%ld%d", &n, &k);
+	store = build_records(n);
+	quel = build_queries(k);
+	ansl = feed_cases(store, quel);
+	feed_back(ansl);
 
 	return 0;
 }

@@ -38,7 +38,7 @@ struct query_list {
 };
 /* QueryList -> (list[index] -> cases; len = length) */
 
-typedef struct answer_record_list ARList;
+typedef struct answer_record_list *ARList;
 struct answer_record_list {
 	Record 	anslist[MAX_ANSWER + 1];		// -> answer records
 	int 	anslen;							// -> length of this answer
@@ -83,16 +83,20 @@ int compare_rec(Record r1, Record r2) {
 		if (r1 -> age < r2 -> age) rt = 1;	// Check the ages
 		else if (r1 -> age == r2 -> age) {
 			int name_p = 0;					// Check the names
-			while (r1 -> name[name_p] || r2 -> name[name_p]) {
-				if (!r2 -> name[name_p]) rt = 1;
-				else if (!r2 -> name[name_p]) rt = 0;
-				else {
-					if (r1 -> name[name_p] < r2 -> name[name_p]) rt = 1;
-					else if (r1 -> name[name_p] < r2 -> name[name_p]) rt = 0;
-					else name_p++;
+			while (r1 -> name[name_p] && r2 -> name[name_p]) {
+				if (r1 -> name[name_p] < r2 -> name[name_p]) {
+					rt = 1;
+					break;
 				}
+				else if (r1 -> name[name_p] > r2 -> name[name_p]) {
+					rt = 0;
+					break;
+				}
+				else name_p++;
 			}
-			if (!r1 -> name[name_p] && !r2 -> name[name_p]) {
+			if (r1 -> name[name_p] && !r2 -> name[name_p]) rt = 1;
+			else if (!r1 -> name[name_p] && r2 -> name[name_p]) rt = 0;
+			else if (!r1 -> name[name_p] && !r2 -> name[name_p]) {
 				perror("In compare_rec(r1, r2):\n\tidentical entries found within input records\n");
 			}								// End of check the name, error if identical, prior = alphabetic
 		}
@@ -139,9 +143,12 @@ Record heap_rmtop(RecordList store) {
 	}										// Error if heap is empty
 
 	rt = store -> list[1];					// Let return the top element
-	store -> list[1] = store -> list[store -> len];	// Move the bottom to the top
-	store -> len--;							// Shorten the heap
-	heap_pdown(store, 1);					// Percolate down the fit the heap
+	if (store -> len != 1) {
+		store -> list[1] = store -> list[store -> len];	// Move the bottom to the top
+		store -> len--;						// Shorten the heap
+		heap_pdown(store, 1);				// Percolate down the fit the heap
+	}
+	else store -> len--;
 
 	return rt;
 }
@@ -150,7 +157,7 @@ void heap_pup(RecordList store, long index) {
 	// Percolate up funtion on a guard-free max-heap
 	// Heap: RecordList store -> list of length -> len
 	Record current = store -> list[index];
-	while (compare_rec(current, store -> list[index / 2]) && !index == 1) {
+	while (index != 1 && compare_rec(current, store -> list[index / 2])) {
 		// While the current Record is prior and the index is not to the top
 		store -> list[index] = store ->list[index / 2];
 		index /= 2;
@@ -167,34 +174,32 @@ void heap_pdown(RecordList store, long index) {
 	Record next;							// The selected chiled
 	int r = 0; 								// If the right child is selected
 
-	if (store -> len != 1) {
-		// If the heap is singular, just return
-		next = store -> list[index * 2];
-		if (store -> len >= 3) {
-			// If the heap is of length 2, next is the only child
-			// If the length is >= 3, go on
-			if (compare_rec(store -> list[index * 2 + 1], next)) {
+	next = store -> list[index * 2];
+	if (store -> len >= 3) {
+		// If the heap is of length 2, next is the only child
+		// If the length is >= 3, go on
+		if (compare_rec(store -> list[index * 2 + 1], next)) {
+			next = store -> list[index * 2 + 1];
+			r = 1;							// The right child is selected
+		}									// Set next Record to the prior most children
+	}
+
+	while (index * 2 <= store -> len && compare_rec(next, current)) {
+		// While the next Record is prior and the current Record has any child
+		store -> list[index] = next;
+		index = index * 2 + r;				// If the right child is selected, r is 1
+
+		r = 0;								// Initialize r
+		if (index * 2 <= store -> len) {
+			next = store -> list[index * 2];
+			if (index * 2 + 1 <= store -> len && 
+				compare_rec(store -> list[index * 2 + 1], next)) {
 				next = store -> list[index * 2 + 1];
-				r = 1;						// The right child is selected
-			}								// Set next Record to the prior most children
-		}
-
-		while (compare_rec(next, current) && index * 2 <= store -> len) {
-			// While the next Record is prior and the current Record has any child
-			store -> list[index] = next;
-			index = index * 2 + r;			// If the right child is selected, r is 1
-
-			r = 0;							// Initialize r
-			if (index * 2 <= store -> len) {
-				next = store -> list[index * 2];
-				if (index * 2 + 1 <= store -> len && 
-					compare_rec(store -> list[index * 2 + 1], next)) {
-					next = store -> list[index * 2 + 1];
-				}
-			}								// Find proper valid next Record
-		}
-		store -> list[index] = current;		// When the shuffle is down, set the current Record
-	} 
+				r = 1;
+			}
+		}									// Find proper valid next Record
+	}
+	store -> list[index] = current;			// When the shuffle is down, set the current Record
 	
 	return;
 }
@@ -209,7 +214,7 @@ RecordList build_records(long n) {
 	if (!rt) {
 		perror("In build_records(n):\n\tout of memory\n");
 	}
-	rt -> list[0] -> worth = MAX_WORTH + 1;			// Not required
+	// rt -> list[0] -> worth = MAX_WORTH + 1;			// Not required
 	rt -> len = 0;
 
 	while (rt -> len < n) {
@@ -237,15 +242,15 @@ QueryList build_queries(long k) {
 		perror("In build_records(n):\n\tout of memory\n");
 	}
 	rt -> len = 0;
-
 	while (rt -> len < k) {
 		// Whille cuurent length not full
 		Query newq;
-		newq = (Query)malloc(sizeof(struct query_list));
+		newq = (Query)malloc(sizeof(struct query));
 		if (!newq) {
 			perror("In build_records(n):\n\tout of memory\n");
 		}
 		scanf("%d%d%d", &newq -> resid, &newq -> lower, &newq -> upper);
+		rt -> list[rt -> len] = newq;
 		rt -> len++;
 	}
 
@@ -258,16 +263,17 @@ AnswerList feed_cases(RecordList store, QueryList quel) {
 	AnswerList rt;
 	rt = (AnswerList)malloc(sizeof(struct answer));
 	rt -> len = quel -> len;					// Length of answers == length of queries
-	rt -> list = (ARList)malloc(sizeof(struct answer_record_list));
-	int alindex = 0;
+
+	int alindex = 0;							// Answerlist index
 	while (alindex < rt -> len) {
+		rt -> list[alindex] = (ARList)malloc(sizeof(struct answer_record_list));
 		rt -> list[alindex] -> anslen = 0;		// Each answer now let Record number to be 0
 		alindex++;
 	}											// Initialize AnswerList
 
 	int dorep = 0;								// Check mark for going on shearching
 	int qlindex = 0;							// Querylist index
-	while (qlindex < quel -> len) {
+	while (store -> len && qlindex < quel -> len) {
 		// While in querylist
 		if (quel -> list[qlindex] -> resid != 0) {
 			dorep = 1;
@@ -280,15 +286,16 @@ AnswerList feed_cases(RecordList store, QueryList quel) {
 		Record current;
 		current = heap_rmtop(store);			// Get the prior most record
 
-		qlindex = 0;
+		qlindex = 0;							// Travel through querylist
 		while (qlindex < quel -> len) {
-			if (quel -> list[qlindex] -> resid != 0) {
+			if (quel -> list[qlindex] -> resid) {
 				// If the required number of answer is not reached
 				if (current -> age >= quel -> list[qlindex] -> lower &&
 					current -> age <= quel -> list[qlindex] -> upper) {
 					// Put current Record into the AnswerList if the age is in the range
-					i = rt -> list[qlindex] -> len++; // i is the value before increase
+					int i = rt -> list[qlindex] -> anslen++; // i is the value before increase
 					rt -> list[qlindex] -> anslist[i] = current;
+					quel -> list[qlindex] -> resid--;
 				}
 			}
 			qlindex++;
@@ -296,7 +303,7 @@ AnswerList feed_cases(RecordList store, QueryList quel) {
 
 		dorep = 0;
 		qlindex = 0;
-		while (qlindex < quel -> len) {
+		while (store -> len && qlindex < quel -> len) {
 			if (quel -> list[qlindex] -> resid != 0) {
 				dorep = 1;
 				break;							// If found residual question, dorepeat
@@ -314,13 +321,17 @@ void feed_back(AnswerList ansl) {
 	int i = 0;
 	while (i < ansl -> len) {
 		printf("Case #%d:\n", i + 1);			// Answer for query #(i + 1)
-		int j = 0;
-		while (j < ansl -> list[i] -> anslen) {
-			printf("%s\t\t%d\t%ld\n", ansl -> list[i] -> anslist[j] -> name,
-									  ansl -> list[i] -> anslist[j] -> age,
-									  ansl -> list[i] -> anslist[j] -> worth);
-			j++;
+		if (ansl -> list[i] -> anslen) {
+			int j = 0;
+			while (j < ansl -> list[i] -> anslen) {
+				printf("%s %d %ld\n", ansl -> list[i] -> anslist[j] -> name,
+										  ansl -> list[i] -> anslist[j] -> age,
+										  ansl -> list[i] -> anslist[j] -> worth);
+				j++;
+			}	
 		}
+		else printf("None\n");
+
 		i++;
 	}
 	return;
@@ -334,12 +345,33 @@ int main(void) {
 	AnswerList 	ansl;
 	long n;
 	int k;
-
 	scanf("%ld%d", &n, &k);
-	store = build_records(n);
-	quel = build_queries(k);
-	ansl = feed_cases(store, quel);
-	feed_back(ansl);
+
+	store = build_records(n);				// Read Records from stdin
+	quel = build_queries(k);				// Read Queries from stdin
+	ansl = feed_cases(store, quel);			// Make answer list
+	feed_back(ansl);						// Put the answer list Records into stdout
+
+	long index = 0;
+	while (index < store -> len) {
+		index++;
+		free(store -> list[index]);			// Free RecordList Records
+	}
+	free(store);							// Free RecordList
+
+	index = 0;
+	while (index < quel -> len) {
+		free(quel -> list[index]);			// Free QueryList Queries
+		index++;
+	}
+	free(quel);								// Free Queries
+
+	index = 0;
+	while (index < ansl -> len) {
+		free(ansl -> list[index]);			// Donot need to free Records, which is all freed previously
+		index++;
+	}
+	free(ansl);
 
 	return 0;
 }

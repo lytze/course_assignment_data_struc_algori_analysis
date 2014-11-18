@@ -39,7 +39,7 @@ HashTable newtable(long prime) {
 } // Initialize a new hash table with given prime
 
 long nextprime(long num) {
-	long primelist[1000]; // up to 19999 there are ~800 primes list length 1000 is ok
+	long primelist[9000]; // up to 19999 there are ~8000 primes list length 9000 is ok
 	long cur = 2; // current prime
 	int len;
 	int isprime;
@@ -141,6 +141,7 @@ HashTable expand(HashTable table) {
 		}
 		i++;
 	}
+	printf("EXPAND [%ld -> %ld] [%ld -> %ld]\n", table -> len, new -> len, table -> fill, new -> fill);
 	free(table);
 	return new;
 } // Expand the hash table
@@ -153,13 +154,14 @@ int main(void)
 	scanf("%ld\n", &n);
 
 	HashTable table;
-	table = newtable(199);
+	table = newtable(1999);
 
 	char cmd;
 	long long acc;
 	char pw[17];
 	while (n) {
 		scanf("%c %lld %s\n", &cmd, &acc, pw);
+		printf("[%c, %lld, %s]\n", cmd, acc, pw);
 		switch (cmd) {
 			case 'R':
 				insert(table, acc, pw);
